@@ -170,6 +170,51 @@ function createGame(input) {
   }, 1000 * dt);
 }
 
+/**
+ * @param {String} path
+ * @returns {Promise<ImageData>}
+ */
+function loadImageData(path) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = function () {
+      const ctx = document.createElement("canvas").getContext("2d");
+      ctx.drawImage(this, 0, 0);
+      resolve(ctx.getImageData(0, 0, this.width, this.height, {}));
+    };
+    img.src = path;
+  });
+}
+
+class GameMap {
+  /**
+   * @param {number} width
+   * @param {number} height
+   * @param {Array<boolean>} walls
+   */
+  constructor(width, height, walls) {
+    this.width = width;
+    this.height = height;
+    this.walls = walls;
+  }
+
+  /**
+   * @param {ImageData} data
+   * @returns {GameMap}
+   */
+  static load(img) {
+    const data32 = new Uint32Array(img.data.buffer);
+    const walls = new Array(img.height * img.width);
+    for (let j = 0; j < img.height; ++j) {
+      for (let i = 0; i < img.width; ++i) {
+        const px = data32[j * img.width + i];
+        walls[j * img.width + i] = px == 0xff000000;
+      }
+    }
+    return new GameMap(img.width, img.height, walls);
+  }
+}
+
 window.onload = () => {
   navigator.mediaDevices?.getUserMedia({ audio: true }).then((stream) => {
     const audioCtx = new AudioContext();
@@ -178,5 +223,10 @@ window.onload = () => {
     });
     createScope(micNode);
     createGame(micNode);
+
+    loadImageData("maps/simple.png").then((img) => {
+      const map = GameMap.load(img);
+      console.log(map);
+    });
   });
 };
