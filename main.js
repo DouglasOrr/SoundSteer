@@ -1,7 +1,7 @@
 "use strict";
 
-const FreqMin = 440;
-const FreqMax = 880;
+const FreqMin = 350;
+const FreqMax = 2 * FreqMin;
 const AmplitudeThreshold = -60;
 
 /**
@@ -76,6 +76,100 @@ function drawShip(ctx) {
   ctx.fill();
 }
 
+/**
+ * Create the interactive game.
+ * @param {AudioNode} input
+ */
+function createGame(input) {
+  // Audio input
+  const analyser = new AnalyserNode(input.context, {
+    fftSize: 4096,
+    smoothingTimeConstant: 0,
+  });
+  input.connect(analyser);
+  const fDelta = analyser.context.sampleRate / (2 * analyser.fftSize);
+  const freqIdxMin = Math.floor(FreqMin / fDelta);
+  const freqIdxMax = Math.ceil(FreqMax / fDelta) + 1;
+  const freqData = new Float32Array(freqIdxMax); // k * sampleRate / (2 * windowSize)
+
+  // Keyboard input
+  const keys = { left: false, right: false, up: false };
+  /** @param {KeyboardEvent} e */
+  function handleKey(e) {
+    if (e.key === "ArrowLeft") keys.left = e.type === "keydown";
+    if (e.key === "ArrowRight") keys.right = e.type === "keydown";
+    if (e.key === "ArrowUp") keys.up = e.type === "keydown";
+  }
+  document.addEventListener("keydown", handleKey);
+  document.addEventListener("keyup", handleKey);
+
+  // Physics & main loop
+  let shipPosition = [256, 256];
+  let shipVelocity = [0, 0];
+  let shipOrientation = Math.PI;
+  let shipAngularVelocity = 0;
+  let shipThrust = 200;
+  let shipAngularThrust = 8;
+  let dt = 0.01;
+  let velocityHalfLife = 0.5;
+  let angularVelocityHalfLife = 0.2;
+
+  /** @type {CanvasRenderingContext2D} */
+  const ctx = document.getElementById("game").getContext("2d");
+  window.setInterval(() => {
+    // Control
+    let controlLeft = false;
+    let controlRight = false;
+    let controlForward = false;
+
+    analyser.getFloatFrequencyData(freqData);
+    let bestValue = -Infinity;
+    let bestIdx = 0;
+    for (let i = freqIdxMin; i < freqIdxMax; ++i) {
+      if (freqData[i] > bestValue) {
+        bestValue = freqData[i];
+        bestIdx = i;
+      }
+    }
+    if (bestValue > AmplitudeThreshold) {
+      const idx = Math.floor(
+        (3 * (bestIdx - freqIdxMin)) / (freqIdxMax - 1 - freqIdxMin)
+      );
+      // console.log(idx, [freqIdxMin, bestIdx, freqIdxMax], bestValue);
+      controlLeft = idx === 0;
+      controlForward = idx === 1;
+      controlRight = idx === 2;
+    }
+    controlLeft = controlLeft || keys.left;
+    controlRight = controlRight || keys.right;
+    controlForward = controlForward || keys.up;
+
+    // Physics
+    shipVelocity[0] *= Math.pow(0.5, dt / velocityHalfLife);
+    shipVelocity[1] *= Math.pow(0.5, dt / velocityHalfLife);
+    const deltaVelocity =
+      (1 * controlForward + 0.5 * controlLeft + 0.5 * controlRight) *
+      dt *
+      shipThrust;
+    shipVelocity[0] += deltaVelocity * -Math.sin(shipOrientation);
+    shipVelocity[1] += deltaVelocity * Math.cos(shipOrientation);
+    shipPosition[0] += dt * shipVelocity[0];
+    shipPosition[1] += dt * shipVelocity[1];
+
+    shipAngularVelocity *= Math.pow(0.5, dt / angularVelocityHalfLife);
+    shipAngularVelocity +=
+      (controlRight - controlLeft) * dt * shipAngularThrust;
+    shipOrientation += dt * shipAngularVelocity;
+
+    // Render
+    ctx.resetTransform();
+    ctx.clearRect(0, 0, ctx.canvas.scrollWidth, ctx.canvas.scrollHeight);
+    ctx.translate(shipPosition[0], shipPosition[1]);
+    ctx.rotate(shipOrientation);
+    drawShip(ctx);
+  }, 1000 * dt);
+}
+
 window.onload = () => {
   navigator.mediaDevices?.getUserMedia({ audio: true }).then((stream) => {
     const audioCtx = new AudioContext();
@@ -83,91 +177,6 @@ window.onload = () => {
       mediaStream: stream,
     });
     createScope(micNode);
-
-    const analyser = new AnalyserNode(micNode.context, {
-      fftSize: 4096,
-      smoothingTimeConstant: 0,
-    });
-    micNode.connect(analyser);
-    const fDelta = analyser.context.sampleRate / (2 * analyser.fftSize);
-    const freqIdxMin = Math.floor(FreqMin / fDelta);
-    const freqIdxMax = Math.ceil(FreqMax / fDelta) + 1;
-    const freqData = new Float32Array(freqIdxMax); // k * sampleRate / (2 * windowSize)
-
-    const keys = { left: false, right: false, up: false };
-    /** @param {KeyboardEvent} e */
-    function handleKey(e) {
-      if (e.key === "ArrowLeft") keys.left = e.type === "keydown";
-      if (e.key === "ArrowRight") keys.right = e.type === "keydown";
-      if (e.key === "ArrowUp") keys.up = e.type === "keydown";
-    }
-    document.addEventListener("keydown", handleKey);
-    document.addEventListener("keyup", handleKey);
-
-    /** @type {CanvasRenderingContext2D} */
-    const ctx = document.getElementById("game").getContext("2d");
-
-    let shipPosition = [256, 256];
-    let shipVelocity = [0, 0];
-    let shipOrientation = Math.PI;
-    let shipAngularVelocity = 0;
-    let shipThrust = 200;
-    let shipAngularThrust = 8;
-    let dt = 0.01;
-    let velocityHalfLife = 0.5;
-    let angularVelocityHalfLife = 0.2;
-
-    window.setInterval(() => {
-      // Control
-      let controlLeft = false;
-      let controlRight = false;
-      let controlForward = false;
-
-      analyser.getFloatFrequencyData(freqData);
-      let bestValue = -Infinity;
-      let bestIdx = 0;
-      for (let i = freqIdxMin; i < freqIdxMax; ++i) {
-        if (freqData[i] > bestValue) {
-          bestValue = freqData[i];
-          bestIdx = i;
-        }
-      }
-      if (bestValue > AmplitudeThreshold) {
-        const idx = Math.floor(
-          (3 * (bestIdx - freqIdxMin)) / (freqIdxMax - 1 - freqIdxMin)
-        );
-        // console.log(idx, [freqIdxMin, bestIdx, freqIdxMax], bestValue);
-        controlLeft = idx === 0;
-        controlForward = idx === 1;
-        controlRight = idx === 2;
-      }
-      controlLeft = controlLeft || keys.left;
-      controlRight = controlRight || keys.right;
-      controlForward = controlForward || keys.up;
-
-      // Physics
-      shipVelocity[0] *= Math.pow(0.5, dt / velocityHalfLife);
-      shipVelocity[1] *= Math.pow(0.5, dt / velocityHalfLife);
-      const deltaVelocity =
-        (1 * controlForward + 0.5 * controlLeft + 0.5 * controlRight) *
-        dt *
-        shipThrust;
-      shipVelocity[0] += deltaVelocity * -Math.sin(shipOrientation);
-      shipVelocity[1] += deltaVelocity * Math.cos(shipOrientation);
-      shipPosition[0] += dt * shipVelocity[0];
-      shipPosition[1] += dt * shipVelocity[1];
-
-      shipAngularVelocity *= Math.pow(0.5, dt / angularVelocityHalfLife);
-      shipAngularVelocity +=
-        (controlRight - controlLeft) * dt * shipAngularThrust;
-      shipOrientation += dt * shipAngularVelocity;
-
-      // Render
-      ctx.resetTransform();
-      ctx.clearRect(0, 0, ctx.canvas.scrollWidth, ctx.canvas.scrollHeight);
-      ctx.translate(shipPosition[0], shipPosition[1]);
-      ctx.rotate(shipOrientation);
-      drawShip(ctx);
-    }, 1000 * dt);
+    createGame(micNode);
   });
 };
