@@ -1,0 +1,20 @@
+body {
+  background-color: #222;
+}
+#scope {
+  background-color: #444;
+}
+.overlay-box {
+  position: relative;
+}
+.overlay-box > * {
+  position: absolute;
+}
+#game-bg {
+  background-color: #222;
+  color: #8af;
+  z-index: 1;
+}
+#game {
+  z-index: 2;
+}

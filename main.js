@@ -59,6 +59,35 @@ function createScope(input) {
   }, 100);
 }
 
+class GameMap {
+  /**
+   * @param {number} width
+   * @param {number} height
+   * @param {Array<boolean>} walls
+   */
+  constructor(width, height, walls) {
+    this.width = width;
+    this.height = height;
+    this.walls = walls;
+  }
+
+  /**
+   * @param {ImageData} data
+   * @returns {GameMap}
+   */
+  static load(img) {
+    const data32 = new Uint32Array(img.data.buffer);
+    const walls = new Array(img.height * img.width);
+    for (let j = 0; j < img.height; ++j) {
+      for (let i = 0; i < img.width; ++i) {
+        const px = data32[j * img.width + i];
+        walls[j * img.width + i] = px == 0xff000000;
+      }
+    }
+    return new GameMap(img.width, img.height, walls);
+  }
+}
+
 /**
  * Draw the ship graphic.
  * @param {CanvasRenderingContext2D} ctx
@@ -77,10 +106,34 @@ function drawShip(ctx) {
 }
 
 /**
+ * Draw the map.
+ * @param {CanvasRenderingContext2D} ctx
+ * @param {GameMap} map
+ */
+function drawMap(ctx, map) {
+  const { width, height } = ctx.canvas.getBoundingClientRect();
+  const scale = Math.min(width / map.width, height / map.height);
+  ctx.translate(
+    (width - scale * map.width) / 2,
+    (height - scale * map.height) / 2
+  );
+  ctx.scale(scale, scale);
+  ctx.fillStyle = window.getComputedStyle(ctx.canvas).color;
+  for (let j = 0; j < map.height; ++j) {
+    for (let i = 0; i < map.width; ++i) {
+      if (map.walls[j * map.width + i]) {
+        ctx.fillRect(i, j, 1, 1);
+      }
+    }
+  }
+}
+
+/**
  * Create the interactive game.
  * @param {AudioNode} input
+ * @param {GameMap} map
  */
-function createGame(input) {
+function createGame(input, map) {
   // Audio input
   const analyser = new AnalyserNode(input.context, {
     fftSize: 4096,
@@ -104,7 +157,7 @@ function createGame(input) {
   document.addEventListener("keyup", handleKey);
 
   // Physics & main loop
-  let shipPosition = [256, 256];
+  let shipPosition = [384, 384];
   let shipVelocity = [0, 0];
   let shipOrientation = Math.PI;
   let shipAngularVelocity = 0;
@@ -113,6 +166,8 @@ function createGame(input) {
   let dt = 0.01;
   let velocityHalfLife = 0.5;
   let angularVelocityHalfLife = 0.2;
+
+  drawMap(document.getElementById("game-bg").getContext("2d"), map);
 
   /** @type {CanvasRenderingContext2D} */
   const ctx = document.getElementById("game").getContext("2d");
@@ -186,47 +241,20 @@ function loadImageData(path) {
   });
 }
 
-class GameMap {
-  /**
-   * @param {number} width
-   * @param {number} height
-   * @param {Array<boolean>} walls
-   */
-  constructor(width, height, walls) {
-    this.width = width;
-    this.height = height;
-    this.walls = walls;
-  }
-
-  /**
-   * @param {ImageData} data
-   * @returns {GameMap}
-   */
-  static load(img) {
-    const data32 = new Uint32Array(img.data.buffer);
-    const walls = new Array(img.height * img.width);
-    for (let j = 0; j < img.height; ++j) {
-      for (let i = 0; i < img.width; ++i) {
-        const px = data32[j * img.width + i];
-        walls[j * img.width + i] = px == 0xff000000;
-      }
-    }
-    return new GameMap(img.width, img.height, walls);
-  }
+/**
+ * @returns {MediaStreamAudioSourceNode}
+ */
+async function loadMicrophone() {
+  const stream = await navigator.mediaDevices?.getUserMedia({ audio: true });
+  return new AudioContext().createMediaStreamSource(stream);
 }
 
+// Start everything.
 window.onload = () => {
-  navigator.mediaDevices?.getUserMedia({ audio: true }).then((stream) => {
-    const audioCtx = new AudioContext();
-    const micNode = new MediaStreamAudioSourceNode(audioCtx, {
-      mediaStream: stream,
-    });
-    createScope(micNode);
-    createGame(micNode);
-
-    loadImageData("maps/simple.png").then((img) => {
-      const map = GameMap.load(img);
-      console.log(map);
-    });
-  });
+  Promise.all([loadMicrophone(), loadImageData("maps/simple.png")]).then(
+    ([micNode, mapImg]) => {
+      createScope(micNode);
+      createGame(micNode, GameMap.load(mapImg));
+    }
+  );
 };
