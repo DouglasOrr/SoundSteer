@@ -1,0 +1,13 @@
+{
+  "name": "soundsteer",
+  "version": "1.0.0",
+  "description": "",
+  "scripts": {
+    "check": "npx eslint src/*.js"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.6.0",
+    "eslint": "^9.6.0",
+    "globals": "^15.8.0"
+  }
+}
