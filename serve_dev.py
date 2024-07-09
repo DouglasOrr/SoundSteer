@@ -2,8 +2,8 @@ import livereload
 
 server = livereload.Server()
 server.root = "src"
-server.watch("*.html")
-server.watch("*.js")
-server.watch("*.css")
-server.watch("maps/*.png")
+server.watch("src/*.html")
+server.watch("src/*.js")
+server.watch("src/*.css")
+server.watch("src/maps/*.png")
 server.serve()

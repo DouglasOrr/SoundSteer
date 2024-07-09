@@ -1,8 +1,7 @@
 "use strict";
 
-const FreqMin = 350;
-const FreqMax = 2 * FreqMin;
-const AmplitudeThreshold = -60;
+import * as physics from "./physics.js";
+import * as control from "./control.js";
 
 /**
  * Create the live FFT frequency scope.
@@ -22,8 +21,8 @@ function createScope(input) {
   const nBins = 256;
   const freqData = new Float32Array(nBins);
   const fDelta = analyser.context.sampleRate / (2 * analyser.fftSize);
-  const freqIdxMin = Math.floor(FreqMin / fDelta);
-  const freqIdxMax = Math.ceil(FreqMax / fDelta) + 1;
+  const freqIdxMin = Math.floor(control.S.freqMin / fDelta);
+  const freqIdxMax = Math.ceil(control.S.freqMax / fDelta) + 1;
   setInterval(() => {
     analyser.getFloatFrequencyData(freqData);
     const { width: screenWidth, height: screenHeight } =
@@ -39,7 +38,7 @@ function createScope(input) {
 
     ctx.beginPath();
     const thresholdY =
-      (screenHeight * (maxA - AmplitudeThreshold)) / (maxA - minA);
+      (screenHeight * (maxA - control.S.amplitudeThreshold)) / (maxA - minA);
     ctx.moveTo(freqIdxMin * dw, thresholdY);
     ctx.lineTo((freqIdxMax - 1) * dw, thresholdY);
     ctx.strokeStyle = "#ff000088";
@@ -57,35 +56,6 @@ function createScope(input) {
     ctx.strokeStyle = "#6666aa88";
     ctx.stroke();
   }, 100);
-}
-
-class GameMap {
-  /**
-   * @param {number} width
-   * @param {number} height
-   * @param {Array<boolean>} walls
-   */
-  constructor(width, height, walls) {
-    this.width = width;
-    this.height = height;
-    this.walls = walls;
-  }
-
-  /**
-   * @param {ImageData} data
-   * @returns {GameMap}
-   */
-  static load(img) {
-    const data32 = new Uint32Array(img.data.buffer);
-    const walls = new Array(img.height * img.width);
-    for (let j = 0; j < img.height; ++j) {
-      for (let i = 0; i < img.width; ++i) {
-        const px = data32[j * img.width + i];
-        walls[j * img.width + i] = px == 0xff000000;
-      }
-    }
-    return new GameMap(img.width, img.height, walls);
-  }
 }
 
 /**
@@ -108,7 +78,7 @@ function drawShip(ctx) {
 /**
  * Draw the map.
  * @param {CanvasRenderingContext2D} ctx
- * @param {GameMap} map
+ * @param {physics.GameMap} map
  */
 function drawMap(ctx, map) {
   const { width, height } = ctx.canvas.getBoundingClientRect();
@@ -131,98 +101,33 @@ function drawMap(ctx, map) {
 /**
  * Create the interactive game.
  * @param {AudioNode} input
- * @param {GameMap} map
+ * @param {physics.GameMap} map
  */
 function createGame(input, map) {
-  // Audio input
-  const analyser = new AnalyserNode(input.context, {
-    fftSize: 4096,
-    smoothingTimeConstant: 0,
-  });
-  input.connect(analyser);
-  const fDelta = analyser.context.sampleRate / (2 * analyser.fftSize);
-  const freqIdxMin = Math.floor(FreqMin / fDelta);
-  const freqIdxMax = Math.ceil(FreqMax / fDelta) + 1;
-  const freqData = new Float32Array(freqIdxMax); // k * sampleRate / (2 * windowSize)
-
-  // Keyboard input
-  const keys = { left: false, right: false, up: false };
-  /** @param {KeyboardEvent} e */
-  function handleKey(e) {
-    if (e.key === "ArrowLeft") keys.left = e.type === "keydown";
-    if (e.key === "ArrowRight") keys.right = e.type === "keydown";
-    if (e.key === "ArrowUp") keys.up = e.type === "keydown";
-  }
-  document.addEventListener("keydown", handleKey);
-  document.addEventListener("keyup", handleKey);
-
-  // Physics & main loop
-  let shipPosition = [384, 384];
-  let shipVelocity = [0, 0];
-  let shipOrientation = Math.PI;
-  let shipAngularVelocity = 0;
-  let shipThrust = 200;
-  let shipAngularThrust = 8;
-  let dt = 0.01;
-  let velocityHalfLife = 0.5;
-  let angularVelocityHalfLife = 0.2;
+  const ship = new physics.Ship();
+  const keyboard = new control.Keyboard(["ArrowLeft", "ArrowUp", "ArrowRight"]);
+  const microphone = new control.Microphone(input);
 
   drawMap(document.getElementById("game-bg").getContext("2d"), map);
 
   /** @type {CanvasRenderingContext2D} */
   const ctx = document.getElementById("game").getContext("2d");
   window.setInterval(() => {
-    // Control
-    let controlLeft = false;
-    let controlRight = false;
-    let controlForward = false;
-
-    analyser.getFloatFrequencyData(freqData);
-    let bestValue = -Infinity;
-    let bestIdx = 0;
-    for (let i = freqIdxMin; i < freqIdxMax; ++i) {
-      if (freqData[i] > bestValue) {
-        bestValue = freqData[i];
-        bestIdx = i;
-      }
-    }
-    if (bestValue > AmplitudeThreshold) {
-      const idx = Math.floor(
-        (3 * (bestIdx - freqIdxMin)) / (freqIdxMax - 1 - freqIdxMin)
-      );
-      // console.log(idx, [freqIdxMin, bestIdx, freqIdxMax], bestValue);
-      controlLeft = idx === 0;
-      controlForward = idx === 1;
-      controlRight = idx === 2;
-    }
-    controlLeft = controlLeft || keys.left;
-    controlRight = controlRight || keys.right;
-    controlForward = controlForward || keys.up;
-
-    // Physics
-    shipVelocity[0] *= Math.pow(0.5, dt / velocityHalfLife);
-    shipVelocity[1] *= Math.pow(0.5, dt / velocityHalfLife);
-    const deltaVelocity =
-      (1 * controlForward + 0.5 * controlLeft + 0.5 * controlRight) *
-      dt *
-      shipThrust;
-    shipVelocity[0] += deltaVelocity * -Math.sin(shipOrientation);
-    shipVelocity[1] += deltaVelocity * Math.cos(shipOrientation);
-    shipPosition[0] += dt * shipVelocity[0];
-    shipPosition[1] += dt * shipVelocity[1];
-
-    shipAngularVelocity *= Math.pow(0.5, dt / angularVelocityHalfLife);
-    shipAngularVelocity +=
-      (controlRight - controlLeft) * dt * shipAngularThrust;
-    shipOrientation += dt * shipAngularVelocity;
+    microphone.update();
+    ship.update({
+      left: +(microphone.control.left || keyboard.ArrowLeft),
+      forward: +(microphone.control.forward || keyboard.ArrowUp),
+      right: +(microphone.control.right || keyboard.ArrowRight),
+    });
 
     // Render
     ctx.resetTransform();
     ctx.clearRect(0, 0, ctx.canvas.scrollWidth, ctx.canvas.scrollHeight);
-    ctx.translate(shipPosition[0], shipPosition[1]);
-    ctx.rotate(shipOrientation);
+    ctx.translate(ship.position[0], ship.position[1]);
+    ctx.rotate(ship.orientation);
+    ctx.scale(0.5, 0.5);
     drawShip(ctx);
-  }, 1000 * dt);
+  }, 1000 * physics.S.dt);
 }
 
 /**
@@ -254,7 +159,7 @@ window.onload = () => {
   Promise.all([loadMicrophone(), loadImageData("maps/simple.png")]).then(
     ([micNode, mapImg]) => {
       createScope(micNode);
-      createGame(micNode, GameMap.load(mapImg));
+      createGame(micNode, physics.GameMap.load(mapImg));
     }
   );
 };
