@@ -65,13 +65,13 @@ function createScope(input) {
 function drawShip(ctx) {
   ctx.fillStyle = "#fff";
   ctx.beginPath();
-  ctx.moveTo(0, 10);
-  ctx.lineTo(-10, -5);
-  ctx.lineTo(-10, -10);
-  ctx.lineTo(0, -5);
-  ctx.lineTo(10, -10);
-  ctx.lineTo(10, -5);
-  ctx.lineTo(0, 10);
+  ctx.moveTo(0, 1);
+  ctx.lineTo(-1, -0.5);
+  ctx.lineTo(-1, -1);
+  ctx.lineTo(0, -0.5);
+  ctx.lineTo(1, -1);
+  ctx.lineTo(1, -0.5);
+  ctx.lineTo(0, 1);
   ctx.fill();
 }
 
@@ -79,6 +79,7 @@ function drawShip(ctx) {
  * Draw the map.
  * @param {CanvasRenderingContext2D} ctx
  * @param {physics.GameMap} map
+ * @returns {DOMMatrix}
  */
 function drawMap(ctx, map) {
   const { width, height } = ctx.canvas.getBoundingClientRect();
@@ -96,6 +97,7 @@ function drawMap(ctx, map) {
       }
     }
   }
+  return ctx.getTransform();
 }
 
 /**
@@ -104,28 +106,38 @@ function drawMap(ctx, map) {
  * @param {physics.GameMap} map
  */
 function createGame(input, map) {
-  const ship = new physics.Ship();
+  const ship = new physics.Ship(
+    map.start[0].position,
+    map.start[0].orientation
+  );
   const keyboard = new control.Keyboard(["ArrowLeft", "ArrowUp", "ArrowRight"]);
   const microphone = new control.Microphone(input);
 
-  drawMap(document.getElementById("game-bg").getContext("2d"), map);
+  const transform = drawMap(
+    document.getElementById("game-bg").getContext("2d"),
+    map
+  );
 
   /** @type {CanvasRenderingContext2D} */
   const ctx = document.getElementById("game").getContext("2d");
   window.setInterval(() => {
     microphone.update();
-    ship.update({
-      left: +(microphone.control.left || keyboard.ArrowLeft),
-      forward: +(microphone.control.forward || keyboard.ArrowUp),
-      right: +(microphone.control.right || keyboard.ArrowRight),
-    });
+    ship.update(
+      {
+        left: +(microphone.control.left || keyboard.ArrowLeft),
+        forward: +(microphone.control.forward || keyboard.ArrowUp),
+        right: +(microphone.control.right || keyboard.ArrowRight),
+      },
+      map
+    );
 
     // Render
     ctx.resetTransform();
     ctx.clearRect(0, 0, ctx.canvas.scrollWidth, ctx.canvas.scrollHeight);
+    ctx.setTransform(transform);
     ctx.translate(ship.position[0], ship.position[1]);
     ctx.rotate(ship.orientation);
-    ctx.scale(0.5, 0.5);
+    ctx.scale(1.2 * physics.S.ship.radius, 1.2 * physics.S.ship.radius);
     drawShip(ctx);
   }, 1000 * physics.S.dt);
 }

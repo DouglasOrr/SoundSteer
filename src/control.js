@@ -1,8 +1,8 @@
 "use strict";
 
 export const S = {
-  freqMin: 350,
-  freqMax: 700,
+  freqMin: 400,
+  freqMax: 800,
   amplitudeThreshold: -60,
 };
 
