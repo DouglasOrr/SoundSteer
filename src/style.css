@@ -1,11 +1,15 @@
 body {
   background-color: #222;
+  color: #fff;
+  font-family: "Courier New", Courier, monospace;
 }
 #scope {
   background-color: #444;
+  display: block;
 }
 .overlay-box {
-  position: relative;
+  display: block;
+  height: 432px;
 }
 .overlay-box > * {
   position: absolute;
@@ -17,4 +21,26 @@ body {
 }
 #game {
   z-index: 2;
+}
+#lap-time {
+  position: relative;
+  padding-top: 1em;
+  padding-left: 1em;
+}
+#settings {
+  padding-top: 2em;
+  padding-left: 1em;
+  font-size: small;
+}
+summary {
+  margin-bottom: 1em;
+}
+button {
+  background-color: #444;
+  color: #fff;
+  margin-top: 1em;
+}
+input {
+  background-color: #444;
+  color: #fff;
 }

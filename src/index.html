@@ -11,8 +11,48 @@
   <body>
     <canvas id="scope" width="768" height="64"></canvas>
     <div class="overlay-box">
-      <canvas id="game-bg" width="768" height="512"></canvas>
-      <canvas id="game" width="768" height="512"></canvas>
+      <canvas id="game-bg" width="768" height="432"></canvas>
+      <canvas id="game" width="768" height="432"></canvas>
     </div>
+    <div id="lap-time"></div>
+    <details id="settings">
+      <summary>Settings</summary>
+      <label for="freq-mid">&nbsp;&nbsp;&nbsp;&nbsp;Pitch mid-point:</label>
+      <input
+        type="number"
+        min="100"
+        max="1300"
+        step="10"
+        name="freq-mid"
+        id="settings-freqMid"
+      />
+      Hz
+      <br />
+      <label for="freq-range">&nbsp;&nbsp;&nbsp;Pitch half-range:</label>
+      <input
+        type="number"
+        min="50"
+        max="1000"
+        step="10"
+        name="freq-range"
+        id="settings-freqHalfRange"
+      />
+      Hz
+      <br />
+      <label for="amplitude">Amplitude threshold:</label>
+      <input
+        type="number"
+        min="-100"
+        max="0"
+        step="5"
+        name="amplitude"
+        id="settings-amplitudeThreshold"
+      />
+      dB
+      <br />
+      <button id="settings-apply">Apply</button>
+      <button id="settings-reset-settings">Reset settings</button>
+      <button id="settings-reset-best-lap">Reset best lap</button>
+    </details>
   </body>
 </html>

@@ -1,10 +1,13 @@
 "use strict";
 
-export const S = {
-  freqMin: 400,
-  freqMax: 800,
+export const S_default = {
+  freqMid: 600,
+  freqHalfRange: 200,
   amplitudeThreshold: -60,
 };
+
+// These are overridden on page load
+export const S = structuredClone(S_default);
 
 /**
  * Monitor the mic for pitch-based control.
@@ -21,8 +24,8 @@ export class Microphone {
     input.connect(this.analyser);
     const fDelta =
       this.analyser.context.sampleRate / (2 * this.analyser.fftSize);
-    this.idxMin = Math.floor(S.freqMin / fDelta);
-    this.idxMax = Math.ceil(S.freqMax / fDelta + 1);
+    this.idxMin = Math.floor((S.freqMid - S.freqHalfRange) / fDelta);
+    this.idxMax = Math.ceil((S.freqMid + S.freqHalfRange) / fDelta + 1);
     this.data = new Float32Array(this.idxMax); // k * sampleRate / (2 * windowSize)
     this.control = { left: false, forward: false, right: false };
   }
