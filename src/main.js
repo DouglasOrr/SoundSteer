@@ -224,11 +224,28 @@ function loadImageData(path) {
 }
 
 /**
- * @returns {MediaStreamAudioSourceNode}
+ * @returns {Promise<MediaStreamAudioSourceNode>}
  */
-async function loadMicrophone() {
-  const stream = await navigator.mediaDevices?.getUserMedia({ audio: true });
-  return new AudioContext().createMediaStreamSource(stream);
+function loadMicrophone() {
+  return new Promise((resolve) => {
+    const ctx = new AudioContext();
+    function finish() {
+      navigator.mediaDevices?.getUserMedia({ audio: true }).then((stream) => {
+        resolve(ctx.createMediaStreamSource(stream));
+      });
+    }
+    if (ctx.state === "running") {
+      finish();
+    } else {
+      document.body.addEventListener(
+        "click",
+        () => {
+          ctx.resume().then(finish);
+        },
+        { once: true }
+      );
+    }
+  });
 }
 
 function setupSettings() {
@@ -276,6 +293,7 @@ window.onload = () => {
   setupSettings();
   Promise.all([loadMicrophone(), loadImageData("maps/simple.png")]).then(
     ([micNode, mapImg]) => {
+      document.getElementById("click-to-start").style.display = "none";
       createScope(micNode);
       createGame(micNode, physics.GameMap.load(mapImg));
     }

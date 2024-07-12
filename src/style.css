@@ -22,6 +22,10 @@ body {
 #game {
   z-index: 2;
 }
+#click-to-start {
+  z-index: 2;
+  margin: 4em;
+}
 #lap-time {
   position: relative;
   padding-top: 1em;
